@@ -89,11 +89,57 @@ class MainWindow(QMainWindow):
         help_about_action = self.creatAction("&About Image Changer", self.helpAbout)
         help_help_action = self.creatAction("&Help", self.helpHelp, QKeySequence.HelpContents)
 
+        # MenuBar(File,Edit,Help)
         self.fileMenu = self.menuBar().addMenu("&File")
         self.fileMenuAction = (
             file_new_action, file_open_action, file_save_action, file_saveas_action, None, file_print_action,
             file_quit_action)
-        self.connect(self.fileMenu,SIGNAL("aboutToShow()"),self.updateFileMenu)
+        self.connect(self.fileMenu, SIGNAL("aboutToShow()"), self.updateFileMenu)
+
+        edit_menu = self.menuBar().addMenu("&Edit")
+        self.addActions(edit_menu, (edit_invert_action, edit_swapredandbule_action, edit_zoom_action))
+        mirror_menu = edit_menu.addMenu(QIcon(":/editmirror.png"), "&Mirror")
+        self.addActions(mirror_menu, (edit_unmirror_action, edit_mirror_horizontal_action, edit_mirror_vertical_action))
+        help_menu = self.menuBar().addMenu("&Help")
+        self.addActions(help_menu, (help_about_action, help_help_action))
+
+        # ToolBar
+        file_tool_bar = self.addToolBar("File")
+        file_tool_bar.setObjectName("FileToolBar")
+        self.addActions(file_tool_bar, (file_new_action, file_open_action, file_saveas_action))
+
+        edit_tool_bar = self.addToolBar("Edit")
+        edit_tool_bar.setObjectName("EditToolBar")
+        self.addActions(edit_tool_bar, (edit_invert_action, edit_swapredandbule_action, edit_unmirror_action,
+                                        edit_mirror_horizontal_action, edit_mirror_vertical_action))
+        # SpinBox of ToolBar
+        self.zoom_spinbox = QSpinBox()
+        self.zoom_spinbox.setRange(1, 400)
+        self.zoom_spinbox.setSuffix(" %")
+        self.zoom_spinbox.setValue(100)
+        self.zoom_spinbox.setToolTip("Zoom the image")
+        self.zoom_spinbox.setStatusTip(self.zoom_spinbox.toolTip())
+        self.zoom_spinbox.setFocusPolicy(Qt.NoFocus)
+        self.connect(self.zoom_spinbox, SIGNAL("valueChanged(int)"), self.showImage)
+        edit_tool_bar.addWidget(self.zoom_spinbox)
+
+        # content menu of image_label
+        self.addActions(self.image_label, (edit_invert_action, edit_swapredandbule_action, edit_unmirror_action,
+                                           edit_mirror_horizontal_action, edit_mirror_vertical_action))
+
+        # reset actions
+        self.resetableActions = ((edit_invert_action, False), (edit_swapredandbule_action, False),
+                                 (edit_unmirror_action, False))
+
+        # settings of MainWindow
+        settings = QSettings()
+        self.recent_files = settings.value("RecentFiles").toStringList()
+        self.restoreGeometry(settings.value("MainWindow/Geometry").toByteArray())
+        self.restoreState(settings.value("MainWindow/State").toByteArray())
+
+        self.setWindowTitle("Image Changer")
+        self.updateFileMenu()
+        QTimer.singleShot(0, self.loadInitialFile)
 
     def creatAction(self, text, slot=None, shortcut=None, icon=None,
                     tip=None, checkable=False, signal="triggered()"):
@@ -110,3 +156,48 @@ class MainWindow(QMainWindow):
         if checkable is not None:
             action.setCheckable(True)
         return action
+
+    def addActions(self, target, actions):
+        for action in actions:
+            if action is None:
+                target.addSeparator()
+            else:
+                target.addAction(action)
+
+    def closeEvent(self, event):
+        if self.okToContinue():
+            settings = QSettings()
+            filename = (QVariant(QString(self.filename)) if self.filename is not None else QVariant())
+            settings.setValue("LastFile", filename)
+            recent_files = (QVariant(self.recent_files) if self.recent_files else QVariant())
+            settings.setValue("RecentFiles", recent_files)
+            settings.setValue("MainWindow/Geometry", QVariant(self.saveGeometry()))
+            settings.setValue("MainWindow/State", QVariant(self.saveState()))
+        else:
+            event.ignore()
+
+    def okToContinue(self):
+        if self.dirty:
+            reply = QMessageBox.question(self, "Image Changer - Unsaved Changes", "Save unsaved changes?",
+                                         QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+            if reply == QMessageBox.Cancel:
+                return False
+            elif reply == QMessageBox.Yes:
+                return self.fileSave()
+        return True
+
+
+def main():
+    app = QApplication(sys.argv)
+    # If the created QSettings object without passing any arguments,it will use
+    # the organization name or domain ,and the application name that we have set here.
+    app.setOrganizationName("Qtrac Ltd.")
+    app.setOrganizationDomain("qtrac.eu")
+    app.setApplicationName("Image Changer")
+    app.setWindowIcon(QIcon(":/icon.png"))
+    form = MainWindow()
+    form.show()
+    app.exec_()
+
+
+main()
